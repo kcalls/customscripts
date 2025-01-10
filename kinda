@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# Configuration Parameters
+NAMESPACE="cattle-impersonation-system"
+SECRETS_FILE="all-secrets.txt"
+FILTERED_SECRETS_FILE="filtered-secrets.txt"
+THRESHOLD_DATE=$(date -d "$1 days ago" --utc +%Y-%m-%dT%H:%M:%SZ)
+
+if [ -z "$1" ]; then
+  echo "Usage: $0 <days>"
+  exit 1
+fi
+
+# Step 1: Capture all secrets in the namespace
+echo "Fetching all secrets in the namespace..."
+kubectl get secrets -n "$NAMESPACE" --sort-by='.metadata.creationTimestamp' \
+  -o custom-columns='NAME:.metadata.name,CREATION:.metadata.creationTimestamp' > "$SECRETS_FILE"
+
+# Step 2: Filter secrets based on the threshold date
+echo "Filtering secrets older than $THRESHOLD_DATE..."
+awk -v threshold="$THRESHOLD_DATE" 'NR>1 {if ($2 < threshold) print $1}' "$SECRETS_FILE" > "$FILTERED_SECRETS_FILE"
+
+# Step 3: Check if there are any secrets to process
+if [ ! -s "$FILTERED_SECRETS_FILE" ]; then
+  echo "No secrets older than $THRESHOLD_DATE found."
+  rm -f "$SECRETS_FILE" "$FILTERED_SECRETS_FILE"
+  exit 0
+fi
+
+# Step 4: Process the filtered secrets
+echo "Processing filtered secrets..."
+while read -r secret; do
+  echo "Deleting secret: $secret"
+  kubectl delete secret "$secret" -n "$NAMESPACE" --ignore-not-found
+done < "$FILTERED_SECRETS_FILE"
+
+# Step 5: Cleanup temporary files
+rm -f "$SECRETS_FILE" "$FILTERED_SECRETS_FILE"
+
+echo "Completed processing secrets."
