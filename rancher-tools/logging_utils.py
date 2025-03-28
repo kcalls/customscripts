@@ -1,29 +1,44 @@
 import logging
+import sys
 from logging.handlers import RotatingFileHandler
-import os
+import colorlog
 
-def setup_logger(name, log_file='rancher_tools.log', level=logging.INFO):
-    """Configure centralized logging"""
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    
-    # Console handler
-    ch = logging.StreamHandler()
-    ch.setFormatter(formatter)
-    
-    # File handler with rotation
-    fh = RotatingFileHandler(
-        log_file,
-        maxBytes=1024*1024*5,  # 5MB
+def setup_logger(name='RancherTools'):
+    """Configure color-coded logging with file rotation"""
+    formatter = colorlog.ColoredFormatter(
+        '%(log_color)s%(asctime)s - %(levelname)-8s%(reset)s %(blue)s%(name)s:%(lineno)d - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+        log_colors={
+            'DEBUG': 'cyan',
+            'INFO': 'green',
+            'WARNING': 'yellow',
+            'ERROR': 'red',
+            'CRITICAL': 'red,bg_white',
+        },
+        secondary_log_colors={},
+        style='%'
+    )
+
+    # Console handler with colors
+    console = colorlog.StreamHandler(sys.stdout)
+    console.setFormatter(formatter)
+
+    # File handler (no colors)
+    file_handler = RotatingFileHandler(
+        'rancher_tools.log',
+        maxBytes=10*1024*1024,  # 10MB
         backupCount=3
     )
-    fh.setFormatter(formatter)
-    
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-    logger.addHandler(ch)
-    logger.addHandler(fh)
+    file_formatter = logging.Formatter(
+        '%(asctime)s - %(levelname)-8s - %(name)s:%(lineno)d - %(message)s'
+    )
+    file_handler.setFormatter(file_formatter)
+
+    logger = colorlog.getLogger(name)
+    logger.setLevel(logging.INFO)
+    logger.addHandler(console)
+    logger.addHandler(file_handler)
     
     return logger
 
-# Singleton logger instance
-logger = setup_logger('RancherTools')
+logger = setup_logger()
